@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AEROS-1 | Autonomous AI Astronaut Mission Terminal</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+  
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.17.0/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3"></script>
+  
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body class="text-slate-200 min-h-screen flex flex-col p-3 md:p-4 scanline select-none bg-[#030712]">
+
+  <header class="flex flex-wrap items-center justify-between border-b border-cyan-500/30 pb-3 mb-3 gap-3 bg-slate-950/90 p-3.5 rounded-xl border border-slate-800">
+    <div class="flex items-center space-x-3">
+      <div class="h-10 w-10 bg-gradient-to-tr from-cyan-600 to-blue-600 rounded-lg flex items-center justify-center text-xl font-bold shadow-lg shadow-cyan-500/20">
+        🛰️
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-lg md:text-xl font-black font-hud tracking-wider text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-blue-400">
+            AEROS-1 MISSION AI
+          </h1>
+          <span class="text-[10px] px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/40 rounded-full flex items-center gap-1 font-bold">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span> OFFLINE EDGE ACTIVE
+          </span>
+        </div>
+        <p class="text-[11px] text-slate-400">Autonomous Microgravity Sequence Guard & Cognitive Co-Pilot</p>
+      </div>
+    </div>
+
+    <div class="flex flex-wrap items-center gap-2.5 text-xs font-semibold">
+      
+      <div class="bg-slate-900 border border-slate-700 px-2.5 py-1 rounded-lg">
+        <span class="text-slate-500 block text-[9px]">ACTIVE PROTOCOL</span>
+        <select id="protocol-selector" onchange="changeProtocol(this.value)" class="bg-transparent text-cyan-300 font-bold outline-none cursor-pointer text-xs">
+          <option value="bio" class="bg-slate-900 text-slate-200">BIO-084: Microfluidic Cell Culture</option>
+          <option value="fluid" class="bg-slate-900 text-slate-200">PHYS-019: Capillary Dynamics</option>
+          <option value="botany" class="bg-slate-900 text-slate-200">AGRI-005: Veggie Hydroponics</option>
+        </select>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-700 px-2.5 py-1 rounded-lg">
+        <span class="text-slate-500 block text-[9px]">EARTH LINK PROFILE</span>
+        <select id="comms-delay" onchange="updateCommsLatency(this.value)" class="bg-transparent text-amber-400 font-bold outline-none cursor-pointer text-xs">
+          <option value="iss" class="bg-slate-900 text-slate-200">ISS Orbit (1.8s Sync)</option>
+          <option value="moon" class="bg-slate-900 text-slate-200">Lunar Gateway (3.2s)</option>
+          <option value="mars" class="bg-slate-900 text-slate-200">Mars Base (14.2 min - Edge Only)</option>
+        </select>
+      </div>
+
+      <button onclick="syncEarthData()" id="uplink-btn" class="bg-slate-900 hover:bg-slate-800 border border-slate-700 text-cyan-300 px-2.5 py-1 rounded-lg flex flex-col items-start transition active:scale-95">
+        <span class="text-slate-500 text-[9px]">GROUND LINK SYNC</span>
+        <span class="flex items-center gap-1 text-[11px] font-bold text-emerald-400">
+          <i class="fa-solid fa-cloud-arrow-up text-[10px]"></i> <span id="sync-status">Buffered: 0 items</span>
+        </span>
+      </button>
+
+      <div class="bg-slate-900 border border-slate-700 px-2.5 py-1 rounded-lg text-center">
+        <span class="text-slate-500 block text-[9px]">TENSOR INFERENCE</span>
+        <span class="text-emerald-400 font-bold" id="fps-val">-- FPS</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 mb-3 text-xs font-mono">
+    <div class="bg-slate-950/80 border border-slate-800/80 px-2.5 py-1.5 rounded-lg flex items-center justify-between">
+      <span class="text-slate-500"><i class="fa-solid fa-heart-pulse text-red-400 mr-1"></i>PULSE</span>
+      <span class="text-red-300 font-bold" id="vital-heart">74 bpm</span>
+    </div>
+    <div class="bg-slate-950/80 border border-slate-800/80 px-2.5 py-1.5 rounded-lg flex items-center justify-between">
+      <span class="text-slate-500"><i class="fa-solid fa-brain text-purple-400 mr-1"></i>COGNITION</span>
+      <span class="text-purple-300 font-bold" id="vital-focus">96.8% (Nominal)</span>
+    </div>
+    <div class="bg-slate-950/80 border border-slate-800/80 px-2.5 py-1.5 rounded-lg flex items-center justify-between">
+      <span class="text-slate-500"><i class="fa-solid fa-battery-half text-amber-400 mr-1"></i>FATIGUE</span>
+      <span class="text-amber-300 font-bold" id="vital-fatigue">Low (Index 0.12)</span>
+    </div>
+    <div class="bg-slate-950/80 border border-slate-800/80 px-2.5 py-1.5 rounded-lg flex items-center justify-between">
+      <span class="text-slate-500"><i class="fa-solid fa-gauge text-cyan-400 mr-1"></i>PRESSURE</span>
+      <span class="text-cyan-300 font-bold">101.32 kPa</span>
+    </div>
+    <div class="bg-slate-950/80 border border-slate-800/80 px-2.5 py-1.5 rounded-lg flex items-center justify-between">
+      <span class="text-slate-500"><i class="fa-solid fa-atom text-blue-400 mr-1"></i>MICRO-G</span>
+      <span class="text-blue-300 font-bold">1.2 × 10⁻⁶ g</span>
+    </div>
+    <div class="bg-slate-950/80 border border-slate-800/80 px-2.5 py-1.5 rounded-lg flex items-center justify-between">
+      <span class="text-slate-500"><i class="fa-solid fa-shield-halved text-emerald-400 mr-1"></i>RAD RATE</span>
+      <span class="text-emerald-300 font-bold">14.8 µSv/h</span>
+    </div>
+  </div>
+
+  <main class="grid grid-cols-1 lg:grid-cols-12 gap-3 flex-1">
+    
+    <section class="lg:col-span-7 flex flex-col gap-3">
+      
+      <div class="relative bg-slate-950 border border-slate-800 rounded-xl overflow-hidden flex-1 min-h-[390px] flex flex-col justify-between p-3.5 glow-cyan" id="video-container">
+        
+        <video id="webcam" autoplay playsinline muted class="absolute inset-0 w-full h-full object-cover"></video>
+        
+        <canvas id="output-canvas" class="absolute inset-0 w-full h-full object-cover pointer-events-none"></canvas>
+
+        <div class="absolute top-3 left-3 border-t-2 border-l-2 border-cyan-400 w-5 h-5 pointer-events-none z-10"></div>
+        <div class="absolute top-3 right-3 border-t-2 border-r-2 border-cyan-400 w-5 h-5 pointer-events-none z-10"></div>
+        <div class="absolute bottom-3 left-3 border-b-2 border-l-2 border-cyan-400 w-5 h-5 pointer-events-none z-10"></div>
+        <div class="absolute bottom-3 right-3 border-b-2 border-r-2 border-cyan-400 w-5 h-5 pointer-events-none z-10"></div>
+
+        <div class="relative z-10 flex justify-between items-center text-xs">
+          <div class="flex items-center gap-2 bg-slate-900/90 backdrop-blur px-2.5 py-1 rounded-full border border-slate-700">
+            <span class="w-2 h-2 bg-red-500 rounded-full animate-ping"></span>
+            <span class="font-bold text-red-400 text-[11px]" id="camera-label">CAM 01 [MACRO GLOVE]</span>
+            <span class="text-slate-500">|</span>
+            <span id="live-timer" class="text-slate-300 font-mono text-[11px]">00:00:00</span>
+          </div>
+
+          <div class="flex items-center gap-1.5">
+            <button onclick="toggleCameraStream()" class="bg-slate-900/90 hover:bg-slate-800 border border-slate-700 text-cyan-300 px-2 py-0.5 rounded text-[10px] font-bold transition">
+              <i class="fa-solid fa-arrows-rotate mr-1"></i> Switch to Cam 02 (Wide)
+            </button>
+            <span class="bg-slate-900/90 border border-slate-700 text-emerald-400 px-2 py-0.5 rounded text-[10px] font-mono">
+              AR GUIDANCE: ON
+            </span>
+          </div>
+        </div>
+
+        <div id="ar-vector-guide" class="relative z-10 mx-auto my-auto p-4 border border-dashed border-cyan-500/40 rounded-full w-44 h-44 flex flex-col items-center justify-center text-center bg-cyan-950/10 backdrop-blur-[1px] pointer-events-none animate-pulse">
+          <div class="w-8 h-8 rounded-full border-2 border-cyan-400 flex items-center justify-center mb-1">
+            <i class="fa-solid fa-crosshairs text-cyan-300 text-xs"></i>
+          </div>
+          <span class="text-[9px] font-mono text-cyan-400 font-bold uppercase" id="ar-guide-text">ALIGN WORKPIECE</span>
+          <span class="text-[8px] text-slate-400 font-mono" id="ar-guide-sub">Glovebox Target Area #1</span>
+        </div>
+
+        <div id="countdown-bar" class="relative z-10 hidden bg-blue-950/90 border border-blue-500 text-blue-200 p-2 rounded-lg flex items-center justify-between my-1">
+          <div class="flex items-center gap-2">
+            <i class="fa-solid fa-stopwatch text-cyan-400 animate-spin text-sm"></i>
+            <span class="text-xs font-bold font-hud" id="countdown-label">TIMED REACTION STEP:</span>
+          </div>
+          <span class="text-sm font-black text-cyan-300 font-mono" id="countdown-clock">00:15</span>
+        </div>
+
+        <div class="relative z-10 bg-slate-950/85 backdrop-blur-md border border-cyan-500/40 p-2.5 rounded-xl max-w-md">
+          <div class="flex items-center justify-between text-[10px] mb-1">
+            <span class="text-cyan-400 font-bold uppercase tracking-wider">SEQUENCE RECOGNITION</span>
+            <span id="target-object-badge" class="px-2 py-0.5 bg-cyan-950 text-cyan-300 border border-cyan-700 rounded text-[9px] font-mono">Initializing...</span>
+          </div>
+          <p id="live-detected-label" class="text-xs font-hud font-bold text-white truncate">Click 'Start WebCam' below to activate...</p>
+        </div>
+
+        <div id="alert-banner" class="relative z-10 hidden bg-red-950/95 border-2 border-red-500 text-red-200 p-2.5 rounded-xl flex items-center justify-between alert-pulse mt-2 shadow-2xl glow-red">
+          <div class="flex items-center gap-2.5">
+            <i class="fa-solid fa-triangle-exclamation text-xl text-red-400 animate-bounce"></i>
+            <div>
+              <p class="text-[10px] font-black uppercase tracking-wide text-red-300">PROTOCOL SEQUENCE VIOLATION</p>
+              <p id="alert-message" class="text-xs font-bold leading-tight">Out of order step detected!</p>
+            </div>
+          </div>
+          <button onclick="dismissAlert()" class="text-[11px] bg-red-600 hover:bg-red-500 text-white px-2.5 py-1 rounded font-bold transition">
+            ACK
+          </button>
+        </div>
+      </div>
+
+      <div class="bg-slate-950 border border-slate-800 p-3 rounded-xl flex flex-wrap items-center justify-between gap-2.5">
+        
+        <div class="flex items-center gap-2">
+          <button id="start-cam-btn" onclick="startCamera()" class="bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold py-2 px-3.5 rounded-lg flex items-center gap-2 transition active:scale-95 shadow-lg shadow-cyan-600/20">
+            <i class="fa-solid fa-camera"></i> Start WebCam
+          </button>
+
+          <button id="mic-btn" onclick="toggleVoiceRecognition()" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold py-2 px-3 rounded-lg flex items-center gap-1.5 transition active:scale-95" title="Click to speak: 'Next', 'Repeat', 'Reset', 'Status'">
+            <i class="fa-solid fa-microphone text-cyan-400" id="mic-icon"></i> <span id="mic-label">Voice Control</span>
+          </button>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button onclick="simulateManualTrigger()" class="bg-emerald-600/90 hover:bg-emerald-500 text-white text-xs font-bold py-2 px-3 rounded-lg flex items-center gap-1.5 transition active:scale-95 shadow-lg shadow-emerald-600/20">
+            <i class="fa-solid fa-circle-check"></i> Next Step (Manual)
+          </button>
+          <button onclick="simulateDeviationTest()" class="bg-red-600/80 hover:bg-red-500 text-white text-xs font-bold py-2 px-2.5 rounded-lg flex items-center gap-1 transition active:scale-95" title="Simulate Deviation Alert">
+            <i class="fa-solid fa-triangle-exclamation"></i> Force Alert
+          </button>
+          <button onclick="resetExperiment()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold py-2 px-2.5 rounded-lg flex items-center gap-1 transition">
+            <i class="fa-solid fa-rotate-left"></i> Reset
+          </button>
+        </div>
+      </div>
+
+      <div class="bg-slate-950 border border-slate-800 p-2.5 rounded-xl">
+        <div class="flex items-center justify-between text-[11px] mb-1.5">
+          <span class="font-hud font-bold text-cyan-400 flex items-center gap-1.5">
+            <i class="fa-solid fa-microchip"></i> EXPLAINABLE AI (XAI) DECISION MATRIX
+          </span>
+          <span class="text-slate-500 font-mono text-[10px]">Quantized INT8 YOLO Backbone</span>
+        </div>
+        <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] font-mono">
+          <div class="bg-slate-900 p-1.5 rounded border border-slate-800">
+            <span class="text-slate-500 block">TENSOR CONFIDENCE</span>
+            <span class="text-emerald-400 font-bold" id="xai-conf">98.4% (Threshold > 35%)</span>
+          </div>
+          <div class="bg-slate-900 p-1.5 rounded border border-slate-800">
+            <span class="text-slate-500 block">BOUNDING BOX IoU</span>
+            <span class="text-cyan-300 font-bold" id="xai-iou">0.89 Overlap Zone</span>
+          </div>
+          <div class="bg-slate-900 p-1.5 rounded border border-slate-800">
+            <span class="text-slate-500 block">DAG SEQUENCE STATE</span>
+            <span class="text-purple-300 font-bold" id="xai-dag">VALIDATED (Step 1 of 4)</span>
+          </div>
+          <div class="bg-slate-900 p-1.5 rounded border border-slate-800">
+            <span class="text-slate-500 block">FRAME DEBOUNCE</span>
+            <span class="text-amber-300 font-bold" id="xai-debounce">8 / 8 Frames Hold</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-slate-950 border border-slate-800 p-3 rounded-xl">
+        <div class="flex items-center justify-between mb-2">
+          <h4 class="font-hud text-xs font-bold text-cyan-400 flex items-center gap-1.5">
+            <i class="fa-solid fa-camera-retro"></i> VISUAL EVIDENCE AUDIT REEL (AUTO-SNAPSHOTS)
+          </h4>
+          <span class="text-[10px] text-slate-500 font-mono">Ground Station Verification Archive</span>
+        </div>
+        <div id="snapshot-gallery" class="grid grid-cols-4 gap-2 min-h-[75px] bg-slate-900/50 p-2 rounded-lg border border-slate-800/80">
+          <div class="flex flex-col items-center justify-center text-center text-slate-600 text-[10px] border border-dashed border-slate-800 rounded p-2">Step 1 Evidence</div>
+          <div class="flex flex-col items-center justify-center text-center text-slate-600 text-[10px] border border-dashed border-slate-800 rounded p-2">Step 2 Evidence</div>
+          <div class="flex flex-col items-center justify-center text-center text-slate-600 text-[10px] border border-dashed border-slate-800 rounded p-2">Step 3 Evidence</div>
+          <div class="flex flex-col items-center justify-center text-center text-slate-600 text-[10px] border border-dashed border-slate-800 rounded p-2">Step 4 Evidence</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="lg:col-span-5 flex flex-col gap-3">
+      
+      <div class="bg-slate-950 border border-slate-800 p-3.5 rounded-xl flex-1 flex flex-col">
+        <div class="flex items-center justify-between pb-2.5 border-b border-slate-800 mb-2.5">
+          <h3 class="font-hud text-xs font-bold text-cyan-400 flex items-center gap-1.5">
+            <i class="fa-solid fa-network-wired"></i> PROTOCOL WORKFLOW (DAG)
+          </h3>
+          <span id="step-counter" class="text-[11px] bg-slate-900 border border-slate-700 px-2 py-0.5 rounded text-slate-300 font-mono">
+            Step 1 / 4
+          </span>
+        </div>
+
+        <div class="space-y-2 flex-1 overflow-y-auto pr-1" id="step-list-container">
+          </div>
+      </div>
+
+      <div class="bg-slate-950 border border-slate-800 p-3.5 rounded-xl h-64 flex flex-col">
+        <div class="flex items-center justify-between pb-2 border-b border-slate-800 mb-2">
+          <h3 class="font-hud text-xs font-bold text-slate-400 flex items-center gap-1.5">
+            <i class="fa-solid fa-terminal text-cyan-400"></i> ISO AUDIT LOG TELEMETRY (.LOG)
+          </h3>
+          <div class="flex items-center gap-2">
+            <button onclick="generateMissionReportPDF()" class="text-[11px] text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1">
+              <i class="fa-solid fa-file-pdf"></i> PDF REPORT
+            </button>
+            <button onclick="downloadLogs()" class="text-[11px] text-cyan-400 hover:text-cyan-300 font-bold flex items-center gap-1">
+              <i class="fa-solid fa-file-arrow-down"></i> EXPORT
+            </button>
+          </div>
+        </div>
+        <div id="log-console" class="flex-1 bg-black/70 p-2 rounded-lg overflow-y-auto text-[11px] text-slate-400 font-mono space-y-1">
+          </div>
+      </div>
+
+    </section>
+  </main>
+
+  <div id="mission-report-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-slate-950 border border-cyan-500/50 rounded-2xl max-w-2xl w-full p-6 text-slate-200 font-mono shadow-2xl max-h-[90vh] overflow-y-auto">
+      <div class="flex justify-between items-start border-b border-slate-800 pb-3 mb-4">
+        <div>
+          <h2 class="text-lg font-hud font-black text-cyan-400">NASA / ISS SCIENTIFIC MISSION AUDIT REPORT</h2>
+          <p class="text-xs text-slate-400">AUTONOMOUS EDGE AI RUNTIME VERIFICATION VERDICT</p>
+        </div>
+        <button onclick="closeReportModal()" class="text-slate-400 hover:text-white text-lg"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div class="grid grid-cols-2 gap-2 bg-slate-900 p-3 rounded-lg border border-slate-800">
+          <div><b class="text-slate-400">Experiment ID:</b> <span id="rep-id">BIO-084</span></div>
+          <div><b class="text-slate-400">Operator:</b> Astronaut Payload Specialist #03</div>
+          <div><b class="text-slate-400">Execution Status:</b> <span class="text-emerald-400 font-bold">100% SEQUENCE VERIFIED</span></div>
+          <div><b class="text-slate-400">Edge Platform:</b> Nvidia Jetson Orin Nano (INT8)</div>
+        </div>
+
+        <h4 class="font-bold text-cyan-300 mt-3">Verified Step Progression:</h4>
+        <div id="rep-steps" class="space-y-1 text-slate-300"></div>
+
+        <h4 class="font-bold text-cyan-300 mt-3">Anomalies / Deviations Handled:</h4>
+        <div id="rep-deviations" class="text-emerald-400 bg-slate-900 p-2 rounded border border-slate-800">
+          0 Unhandled Sequence Breaks. All deviation alerts acknowledged and corrected in flight.
+        </div>
+      </div>
+
+      <div class="mt-6 flex justify-end gap-3">
+        <button onclick="window.print()" class="bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs px-4 py-2 rounded-lg flex items-center gap-1.5">
+          <i class="fa-solid fa-print"></i> Print Formal Report
+        </button>
+        <button onclick="closeReportModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs px-4 py-2 rounded-lg">
+          Dismiss
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
